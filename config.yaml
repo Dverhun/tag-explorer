@@ -32,15 +32,11 @@ REQUIRED_TAGS:
   - cost_center
   - map-migrated
 
-# Output directory for Excel reports
-reports_dir: ./reports
-
-# Metrics gathering interval in seconds (default: 3600 = 1 hour)
-# Set to 0 to disable periodic scanning (only manual scans via /rescan)
-metrics_gathering_interval: 3600
-
-# Optional: Specific service filters (if you want to limit scanning)
-# resource_type_filters:
-#   - "ec2:instance"
-#   - "s3:bucket"
-#   - "rds:db"
+# Exclude specific resource types from scanning (supports wildcards)
+# Common patterns:
+#   - "pod" - matches any resource type containing "pod"
+#   - "ecs:task" - matches ECS tasks
+#   - "eks:*" - matches all EKS resources
+excluded_resource_types:
+  - "pod"
+  - "ecs:task"

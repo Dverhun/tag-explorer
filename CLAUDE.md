@@ -71,6 +71,7 @@ metrics.expose_prometheus_metrics()
 - `assume_role_name_template`: Role name template (e.g., "terraform" → "arn:aws:iam::{account_id}:role/terraform")
 - `aws_account_overrides`: Optional explicit role ARNs per account
 - `REQUIRED_TAGS`: List of tag names to validate
+- `excluded_resource_types`: Optional list of resource type patterns to exclude (supports wildcards)
 
 ### Cross-Account Access Pattern
 
@@ -219,6 +220,22 @@ Add to account's `regions` list in `config.yaml`:
   regions: ["us-east-1", "eu-west-1", "ap-southeast-1"]  # Add here
 ```
 
-### Filtering Resource Types
+### Excluding Resource Types
 
-Not currently supported. All discoverable resources are scanned. To add filtering, modify `src/aws_audit.py:_scan_region()` to pass `ResourceTypeFilters` to `get_resources()` API call.
+Configure exclusion patterns in `config.yaml`:
+```yaml
+excluded_resource_types:
+  - "pod"           # Substring match
+  - "ecs:task"      # Specific type
+  - "eks:*"         # Wildcard for all EKS resources
+```
+
+Pattern matching in `_is_excluded()`:
+- Case-insensitive substring matching
+- Wildcard support with `*`
+- Applied during resource iteration in `_scan_region()`
+
+Excluded resources:
+- Not counted in `total` metric
+- Logged at debug level
+- Tracked separately in `excluded` count

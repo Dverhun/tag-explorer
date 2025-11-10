@@ -66,11 +66,42 @@ def _parse_resource_arn(arn: str) -> Tuple[str, str]:
         return "unknown", "unknown"
 
 
+def _is_excluded(resource_type: str, exclusion_patterns: List[str]) -> bool:
+    """Check if resource type matches any exclusion pattern.
+
+    Supports:
+    - Exact match: "pod"
+    - Substring match: pattern in resource_type
+    - Service prefix: "ecs:task" matches "task" for ECS service
+    - Wildcard: "eks:*" matches all resource types containing "eks:"
+    """
+    if not exclusion_patterns:
+        return False
+
+    resource_type_lower = resource_type.lower()
+
+    for pattern in exclusion_patterns:
+        pattern_lower = pattern.lower()
+
+        # Wildcard match (e.g., "eks:*")
+        if "*" in pattern_lower:
+            prefix = pattern_lower.replace("*", "")
+            if prefix in resource_type_lower:
+                return True
+
+        # Exact or substring match
+        elif pattern_lower in resource_type_lower:
+            return True
+
+    return False
+
+
 def validate_resource_tags(
     aws_account_matrix: List[Dict[str, Any]],
     required_tags: List[str],
     assume_role_name_template: Optional[str] = None,
     account_overrides: Optional[Dict[str, Dict[str, str]]] = None,
+    excluded_resource_types: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Validate tags across AWS accounts and regions.
 
@@ -79,13 +110,18 @@ def validate_resource_tags(
         required_tags: List of required tag names
         assume_role_name_template: Role name template with {account_id} placeholder
         account_overrides: Account-specific role ARN overrides
+        excluded_resource_types: List of resource type patterns to exclude (supports wildcards)
 
     Returns:
         Dict[account_id -> {account_name, regions -> {compliant, non_compliant, total, errors}}]
     """
     results = {}
     account_overrides = account_overrides or {}
+    excluded_resource_types = excluded_resource_types or []
     base_sts = boto3.client("sts")
+
+    if excluded_resource_types:
+        logger.info("Excluding resource types: %s", excluded_resource_types)
 
     for acct in aws_account_matrix:
         account_id = acct["account_id"]
@@ -117,7 +153,7 @@ def validate_resource_tags(
         for region in regions:
             logger.info("Scanning region: %s", region)
             account_result["regions"][region] = _scan_region(
-                region, creds, required_tags, account_id, account_name
+                region, creds, required_tags, account_id, account_name, excluded_resource_types
             )
 
         results[account_id] = account_result
@@ -159,10 +195,11 @@ def _scan_region(
     creds: Dict[str, str],
     required_tags: List[str],
     account_id: str,
-    account_name: str
+    account_name: str,
+    excluded_resource_types: List[str]
 ) -> Dict[str, Any]:
     """Scan single region for tag compliance."""
-    result = {"compliant": [], "non_compliant": [], "total": 0, "errors": []}
+    result = {"compliant": [], "non_compliant": [], "total": 0, "excluded": 0, "errors": []}
 
     try:
         client = _get_tagging_client(region, creds)
@@ -173,6 +210,15 @@ def _scan_region(
             logger.debug("Processing page %d: %d resources", page_num, len(resources))
 
             for resource in resources:
+                arn = resource.get("ResourceARN", "")
+                _, resource_type = _parse_resource_arn(arn)
+
+                # Check if resource type is excluded
+                if _is_excluded(resource_type, excluded_resource_types):
+                    result["excluded"] += 1
+                    logger.debug("Excluding resource: %s (type: %s)", arn, resource_type)
+                    continue
+
                 result["total"] += 1
                 record = _validate_resource(
                     resource, required_tags, account_id, account_name, region
@@ -181,8 +227,9 @@ def _scan_region(
                 target.append(record)
 
         logger.info(
-            "Region %s: %d total, %d compliant, %d non-compliant",
-            region, result["total"], len(result["compliant"]), len(result["non_compliant"])
+            "Region %s: %d scanned, %d compliant, %d non-compliant, %d excluded",
+            region, result["total"], len(result["compliant"]),
+            len(result["non_compliant"]), result["excluded"]
         )
 
     except ClientError as e:
