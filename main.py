@@ -99,7 +99,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Scan and print metrics to stdout
+  # CLI Mode - Scan and print metrics to stdout
   python main.py
 
   # Export metrics to file
@@ -107,6 +107,12 @@ Examples:
 
   # Use custom config
   python main.py --config custom-config.yaml
+
+  # Web Mode - Run as HTTP server for Prometheus scraping
+  python main.py --web
+
+  # Web mode with custom settings
+  python main.py --web --port 9090 --refresh-interval 600
         """
     )
 
@@ -119,13 +125,48 @@ Examples:
         '--output',
         help='Output file for metrics (default: stdout)'
     )
+    parser.add_argument(
+        '--web',
+        action='store_true',
+        help='Run as web server with /metrics endpoint (for Kubernetes/Prometheus)'
+    )
+    parser.add_argument(
+        '--host',
+        default='0.0.0.0',
+        help='Host to bind web server to (default: 0.0.0.0)'
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=8080,
+        help='Port for web server (default: 8080)'
+    )
+    parser.add_argument(
+        '--refresh-interval',
+        type=int,
+        default=300,
+        help='Seconds between metric refreshes in web mode (default: 300)'
+    )
 
     args = parser.parse_args()
 
     try:
-        scan_and_export_metrics(args.config, args.output)
+        if args.web:
+            # Web server mode
+            from src.web_server import run_web_server
+            logger.info("Starting in WEB MODE")
+            cfg = load_config(args.config)
+            run_web_server(
+                config=cfg,
+                host=args.host,
+                port=args.port,
+                refresh_interval=args.refresh_interval
+            )
+        else:
+            # CLI mode (original behavior)
+            scan_and_export_metrics(args.config, args.output)
     except Exception as e:
-        logger.error("Scan failed: %s", e, exc_info=True)
+        logger.error("Failed: %s", e, exc_info=True)
         sys.exit(1)
 
 

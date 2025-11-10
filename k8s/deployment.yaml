@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aws-tag-exporter
+  labels:
+    app: aws-tag-exporter
+    component: metrics-exporter
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Only one instance should run at a time
+  selector:
+    matchLabels:
+      app: aws-tag-exporter
+  template:
+    metadata:
+      labels:
+        app: aws-tag-exporter
+        component: metrics-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: aws-tag-exporter
+      containers:
+      - name: exporter
+        image: aws-tag-exporter:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        # Optional: Override refresh interval
+        # - name: REFRESH_INTERVAL
+        #   value: "300"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        # Optional: Mount AWS credentials (if not using IRSA)
+        # - name: aws-credentials
+        #   mountPath: /root/.aws
+        #   readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: aws-tag-exporter-config
+      # Optional: AWS credentials volume
+      # - name: aws-credentials
+      #   secret:
+      #     secretName: aws-credentials
+      restartPolicy: Always
