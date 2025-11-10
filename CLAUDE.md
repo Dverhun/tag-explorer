@@ -142,6 +142,8 @@ For each resource:
 
 **Metric Types**: All Gauges
 
+**Basic Metrics:**
+
 | Metric | Labels | Description |
 |--------|--------|-------------|
 | `tag_compliant_total` | tag, account_name, account_id, region | Count of resources with tag present |
@@ -150,9 +152,19 @@ For each resource:
 | `resources_scanned_total` | account_name, account_id, region | Total resources scanned |
 | `compliance_percentage` | account_name, account_id, region | Overall compliance % |
 
+**Advanced Compliance Metrics:**
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `tag_compliance_percentage` | tag, account_name, account_id, region | Compliance % per individual tag |
+| `tag_resource_type_compliance_percentage` | tag, resource_type, account_name, account_id, region | Compliance % per tag and resource type |
+| `resources_fully_compliant_total` | account_name, account_id, region | Resources with ALL required tags |
+| `resources_fully_compliant_by_type_total` | resource_type, account_name, account_id, region | Fully compliant resources by type |
+
 **Cardinality Management**:
 - ARN labels truncated to 200 chars
-- `TAG_MISSING_DETAIL.clear()` before each update to avoid stale data
+- Detail metrics cleared before each update to avoid stale data
+- Advanced metrics calculated in `_update_advanced_compliance_metrics()`
 
 ## Code Style
 
