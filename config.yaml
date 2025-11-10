@@ -1,0 +1,46 @@
+# AWS Tag Compliance Auditor Configuration
+
+# Matrix of AWS accounts and regions to scan
+aws_account_matrix:
+  - account_id: ""
+    account_name: "fp-dev"
+    regions: ["us-east-1"]
+  
+  - account_id: ""
+    account_name: "infra-dev"
+    regions: ["us-east-1"]
+  
+  - account_id: ""
+    account_name: "di-prod"
+    regions: ["us-east-1", "eu-central-1"] 
+
+# IAM Role configuration for cross-account access
+# Option 1: Use a role name template (will be formatted with account_id)
+assume_role_name_template: "terraform"
+
+# Option 2: Specify explicit role ARN per account (overrides template)
+# aws_account_overrides:
+#   "965251768795":
+#     role_arn: "arn:aws:iam::965251768795:role/CustomAuditRole"
+
+# Required tags that must be present on all resources
+REQUIRED_TAGS:
+  - environment
+  - product
+  - owner
+  - maintainer
+  - cost_center
+  - map-migrated
+
+# Output directory for Excel reports
+reports_dir: ./reports
+
+# Metrics gathering interval in seconds (default: 3600 = 1 hour)
+# Set to 0 to disable periodic scanning (only manual scans via /rescan)
+metrics_gathering_interval: 3600
+
+# Optional: Specific service filters (if you want to limit scanning)
+# resource_type_filters:
+#   - "ec2:instance"
+#   - "s3:bucket"
+#   - "rds:db"

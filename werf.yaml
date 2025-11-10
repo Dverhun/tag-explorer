@@ -1,0 +1,5 @@
+project: aws-tag-auditor
+configVersion: 1
+---
+image: aws-tag-auditor
+dockerfile: ./Dockerfile

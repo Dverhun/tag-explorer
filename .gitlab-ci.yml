@@ -1,0 +1,12 @@
+
+stages:
+  - container
+  - security
+  - cleanup
+
+include:
+  - project: 'devops/ci/templates'
+    ref: v1.1.19
+    file: gitops/pipelines/.gitlab-ci.typical-werf-app.yml
+
+

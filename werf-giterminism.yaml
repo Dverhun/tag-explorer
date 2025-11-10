@@ -1,0 +1,6 @@
+giterminismConfigVersion: 1
+config:
+  goTemplateRendering:
+    allowEnvVariables:
+      - NOCACHE
+      - CI_JOB_STARTED_AT
