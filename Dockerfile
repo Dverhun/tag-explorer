@@ -20,5 +20,9 @@ COPY config.yaml ./
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Default command: run scan and output metrics
-CMD ["python", "main.py"]
+# Expose port for web server
+EXPOSE 8080
+
+# Default command: run in web mode for Kubernetes deployment
+# Override for CLI mode: docker run <image> python main.py --output metrics.txt
+CMD ["python", "main.py", "--web"]

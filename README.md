@@ -15,6 +15,8 @@ Scans AWS resources using the Resource Groups Tagging API, validates required ta
 
 ## Quick Start
 
+### CLI Mode (One-time Scan)
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -28,6 +30,29 @@ python main.py --output metrics.txt
 # Use custom config
 python main.py --config custom-config.yaml
 ```
+
+### Web Mode (Long-running Service)
+
+Run as a web server that periodically scans AWS resources and exposes metrics on HTTP endpoint:
+
+```bash
+# Start web server (default: http://0.0.0.0:8080)
+python main.py --web
+
+# Custom port and refresh interval
+python main.py --web --port 9090 --refresh-interval 600
+
+# With custom config
+python main.py --web --config custom-config.yaml --refresh-interval 300
+```
+
+**Web Mode Endpoints:**
+- `GET /metrics` - Prometheus metrics (for scraping)
+- `GET /health` - Health check (Kubernetes liveness probe)
+- `GET /ready` - Readiness check (Kubernetes readiness probe)
+- `GET /` - Service status and information
+
+Web mode is designed for Kubernetes deployment where Prometheus scrapes the `/metrics` endpoint.
 
 ## Configuration
 
@@ -213,25 +238,88 @@ In each target account, create a role with:
 # Build image
 docker build -t aws-tag-exporter .
 
-# Run container
+# Web Mode (default) - Run as HTTP server
+docker run -d \
+  -p 8080:8080 \
+  -v ~/.aws:/root/.aws:ro \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  --name aws-tag-exporter \
+  aws-tag-exporter
+
+# Test metrics endpoint
+curl http://localhost:8080/metrics
+
+# CLI Mode - One-time scan
 docker run --rm \
   -v ~/.aws:/root/.aws:ro \
   -v $(pwd)/config.yaml:/app/config.yaml \
   aws-tag-exporter \
   python main.py --output /app/metrics.txt
 
-# Output to stdout
+# CLI Mode - Output to stdout
 docker run --rm \
   -v ~/.aws:/root/.aws:ro \
   -v $(pwd)/config.yaml:/app/config.yaml \
-  aws-tag-exporter
+  aws-tag-exporter \
+  python main.py
 ```
+
+## Kubernetes Deployment
+
+Deploy as a long-running service in Kubernetes with automatic Prometheus scraping:
+
+```bash
+# See k8s/ directory for full manifests
+
+# Quick deploy with kubectl
+kubectl apply -f k8s/serviceaccount.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+
+# Or use Kustomize
+kubectl apply -k k8s/
+
+# Verify deployment
+kubectl port-forward svc/aws-tag-exporter 8080:8080
+curl http://localhost:8080/metrics
+```
+
+**Features:**
+- Runs as Deployment with automatic restarts
+- Periodic background scanning (configurable interval)
+- Health and readiness probes for Kubernetes
+- Prometheus scraping via Service annotations or ServiceMonitor
+- Support for AWS IRSA (IAM Roles for Service Accounts)
+
+See [k8s/README.md](k8s/README.md) for detailed deployment guide.
 
 ## Integration with Prometheus
 
-### Prometheus Node Exporter Textfile Collector
+### Method 1: Web Mode + HTTP Service Discovery (Recommended)
 
-Export metrics to file for collection:
+Run in web mode and let Prometheus scrape the `/metrics` endpoint:
+
+```yaml
+# Prometheus scrape config
+scrape_configs:
+  - job_name: 'aws-tag-exporter'
+    static_configs:
+      - targets: ['localhost:8080']  # Or service address in Kubernetes
+    scrape_interval: 60s
+```
+
+In Kubernetes, use Service annotations for automatic discovery:
+```yaml
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+```
+
+### Method 2: Prometheus Node Exporter Textfile Collector
+
+Export metrics to file for collection (CLI mode):
 
 ```bash
 # Run periodically (e.g., via cron)
@@ -241,9 +329,9 @@ python main.py --output /var/lib/node_exporter/textfile_collector/aws_tags.prom
 0 * * * * cd /app && python main.py --output /var/lib/node_exporter/textfile_collector/aws_tags.prom
 ```
 
-### Pushgateway
+### Method 3: Pushgateway
 
-Push metrics to Prometheus Pushgateway:
+Push metrics to Prometheus Pushgateway (CLI mode):
 
 ```bash
 python main.py --output metrics.txt
@@ -313,6 +401,48 @@ Uses **AWS Resource Groups Tagging API** for cross-service discovery:
 1. **Untagged resources**: Resources with zero tags are invisible to Resource Groups Tagging API
 2. **Cardinality**: ARN labels truncated to 200 chars to prevent metric explosion
 3. **Rate limiting**: AWS API throttling may slow large scans (automatic retries configured)
+
+## Web Mode Operations
+
+### Background Scanning
+
+Web mode runs a background task that periodically scans AWS resources:
+
+- **Default interval**: 300 seconds (5 minutes)
+- **Configurable**: `--refresh-interval` flag or environment variable
+- **First scan**: Runs immediately on startup
+- **In-memory metrics**: Prometheus metrics updated after each scan
+
+### Health Checks
+
+**Liveness Probe (`/health`):**
+- Returns 200 OK if service is running
+- Returns 503 if last scan encountered errors
+- Use for Kubernetes liveness probe
+
+**Readiness Probe (`/ready`):**
+- Returns 200 OK after first successful scan
+- Returns 503 if no successful scan yet
+- Use for Kubernetes readiness probe
+
+### Graceful Shutdown
+
+Web mode handles SIGTERM/SIGINT for graceful shutdown:
+- Completes current scan if in progress
+- Stops background refresh task
+- Closes HTTP server cleanly
+
+### Performance Considerations
+
+**Refresh Interval:**
+- Should be longer than scan duration
+- Should be longer than Prometheus scrape interval
+- Recommended: 300-600 seconds for most deployments
+
+**Resource Usage:**
+- Memory scales with number of resources discovered
+- CPU spikes during scan, idle between scans
+- Adjust container limits based on number of accounts/regions
 
 ## Example Use Cases
 
