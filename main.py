@@ -37,11 +37,16 @@ def scan_and_export_metrics(config_path: str = "config.yaml", output_file: str =
     required_tags = cfg.get('REQUIRED_TAGS', [])
     assume_template = cfg.get('assume_role_name_template')
     overrides = cfg.get('aws_account_overrides', {})
+    excluded_types = cfg.get('excluded_resource_types', [])
 
     logger.info("Starting AWS resource scan across %d accounts", len(matrix))
     logger.info("Required tags: %s", required_tags)
+    if excluded_types:
+        logger.info("Excluded resource types: %s", excluded_types)
 
-    results = validate_resource_tags(matrix, required_tags, assume_template, overrides)
+    results = validate_resource_tags(
+        matrix, required_tags, assume_template, overrides, excluded_types
+    )
 
     logger.info("Updating Prometheus metrics")
     update_metrics(results)
