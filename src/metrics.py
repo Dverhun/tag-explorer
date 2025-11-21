@@ -67,6 +67,12 @@ RESOURCES_FULLY_COMPLIANT_BY_TYPE = Gauge(
     ["resource_type", "account_name", "account_id", "region"],
 )
 
+RESOURCES_FULLY_COMPLIANT_BY_TYPE_PERCENTAGE = Gauge(
+    "resources_fully_compliant_by_type_percentage",
+    "Percentage of fully compliant resources by resource type",
+    ["resource_type", "account_name", "account_id", "region"],
+)
+
 
 def update_metrics(compliance_data: Dict[str, Any]):
     """Update Prometheus metrics from compliance scan results.
@@ -81,6 +87,7 @@ def update_metrics(compliance_data: Dict[str, Any]):
     TAG_COMPLIANCE_PERCENTAGE.clear()
     TAG_RESOURCE_TYPE_COMPLIANCE_PERCENTAGE.clear()
     RESOURCES_FULLY_COMPLIANT_BY_TYPE.clear()
+    RESOURCES_FULLY_COMPLIANT_BY_TYPE_PERCENTAGE.clear()
 
     for account_id, acct in compliance_data.items():
         if "error" in acct:
@@ -200,11 +207,20 @@ def _update_advanced_compliance_metrics(
 
     # Track compliance by resource type (fully compliant)
     type_compliant_counts = {}
+    type_total_counts = {}
+
     for rec in compliant:
         resource_type = rec.get("resource_type", "unknown")
         key = (resource_type, acct_name, account_id, region)
         type_compliant_counts[key] = type_compliant_counts.get(key, 0) + 1
+        type_total_counts[key] = type_total_counts.get(key, 0) + 1
 
+    for rec in non_compliant:
+        resource_type = rec.get("resource_type", "unknown")
+        key = (resource_type, acct_name, account_id, region)
+        type_total_counts[key] = type_total_counts.get(key, 0) + 1
+
+    # Set absolute counts
     for (resource_type, acct_name, account_id, region), count in type_compliant_counts.items():
         RESOURCES_FULLY_COMPLIANT_BY_TYPE.labels(
             resource_type=resource_type,
@@ -212,6 +228,19 @@ def _update_advanced_compliance_metrics(
             account_id=account_id,
             region=region
         ).set(count)
+
+    # Calculate and set percentages
+    for key, total_count in type_total_counts.items():
+        compliant_count = type_compliant_counts.get(key, 0)
+        percentage = (compliant_count / total_count * 100) if total_count > 0 else 0
+
+        resource_type, acct_name, account_id, region = key
+        RESOURCES_FULLY_COMPLIANT_BY_TYPE_PERCENTAGE.labels(
+            resource_type=resource_type,
+            account_name=acct_name,
+            account_id=account_id,
+            region=region
+        ).set(percentage)
 
     # Calculate per-tag compliance percentage
     tag_total_counts = {}

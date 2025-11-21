@@ -144,8 +144,8 @@ Examples:
     parser.add_argument(
         '--refresh-interval',
         type=int,
-        default=300,
-        help='Seconds between metric refreshes in web mode (default: 300)'
+        default=None,
+        help='Seconds between metric refreshes in web mode (overrides config.yaml, default: 300)'
     )
 
     args = parser.parse_args()
@@ -156,11 +156,15 @@ Examples:
             from src.web_server import run_web_server
             logger.info("Starting in WEB MODE")
             cfg = load_config(args.config)
+
+            # Get refresh_interval from config, allow CLI to override
+            refresh_interval = args.refresh_interval if args.refresh_interval is not None else cfg.get('refresh_interval', 300)
+
             run_web_server(
                 config=cfg,
                 host=args.host,
                 port=args.port,
-                refresh_interval=args.refresh_interval
+                refresh_interval=refresh_interval
             )
         else:
             # CLI mode (original behavior)
