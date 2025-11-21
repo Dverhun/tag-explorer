@@ -37,6 +37,6 @@ REQUIRED_TAGS:
 #   - "pod" - matches any resource type containing "pod"
 #   - "ecs:task" - matches ECS tasks
 #   - "eks:*" - matches all EKS resources
-excluded_resource_types:
-  - "pod"
-  - "ecs:task"
+# excluded_resource_types:
+#   - "pod"
+#   - "ecs:task"

@@ -159,3 +159,8 @@ metadata//*
 ./config_working.yaml
 
 config_working.yaml
+
+
+bin/**
+bin/*
+bin
