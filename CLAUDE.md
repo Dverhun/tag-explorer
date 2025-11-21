@@ -26,7 +26,8 @@ python main.py --config custom-config.yaml
 
 # Web Mode - Run as HTTP server (for Kubernetes)
 python main.py --web
-python main.py --web --port 9090 --refresh-interval 600
+python main.py --web --port 9090
+python main.py --web --refresh-interval 600  # Override config.yaml value
 
 # Docker - Web Mode (default)
 docker build -t aws-tag-exporter .
@@ -119,6 +120,7 @@ FastAPI app starts
 - `aws_account_overrides`: Optional explicit role ARNs per account
 - `REQUIRED_TAGS`: List of tag names to validate
 - `excluded_resource_types`: Optional list of resource type patterns to exclude (supports wildcards)
+- `refresh_interval`: Seconds between metric refreshes in web/daemon mode (default: 300, can be overridden by --refresh-interval CLI flag)
 
 ### Cross-Account Access Pattern
 
@@ -207,6 +209,7 @@ For each resource:
 | `tag_resource_type_compliance_percentage` | tag, resource_type, account_name, account_id, region | Compliance % per tag and resource type |
 | `resources_fully_compliant_total` | account_name, account_id, region | Resources with ALL required tags |
 | `resources_fully_compliant_by_type_total` | resource_type, account_name, account_id, region | Fully compliant resources by type |
+| `resources_fully_compliant_by_type_percentage` | resource_type, account_name, account_id, region | Percentage of fully compliant resources by type |
 
 **Cardinality Management**:
 - ARN labels truncated to 200 chars
